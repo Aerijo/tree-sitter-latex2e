@@ -6,4 +6,26 @@ Command
 
 -----
 
-(program (control_sequence))
+(program (control_sequence (control_word (escape_char) (letters))))
+
+
+======
+Environment
+======
+
+\begin{foo} \end{foo}
+\begin{f{o}o} bar \end{{{f}o{o}}}
+
+-----
+
+(program
+  (environment
+    (open_env (begin_command (escape_char)) (begin_group) (env_name) (end_group))
+    (close_env (end_command (escape_char)) (begin_group) (env_name) (end_group))
+  )
+  (environment
+    (open_env (begin_command (escape_char)) (begin_group) (env_name) (end_group))
+    (env_body (text))
+    (close_env (end_command (escape_char)) (begin_group) (env_name) (end_group))
+  )
+)

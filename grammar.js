@@ -1,9 +1,13 @@
+// NOTE: investigate cause of module not self-registered error
+
 module.exports = grammar({
   name: "latex",
 
   externals: $ => [
     $._start_env_name,
-    $._end_env_name
+    $._end_env_name,
+    $._erroneous_end_env_name,
+    $._verb
   ],
 
   rules: {
@@ -37,15 +41,16 @@ module.exports = grammar({
     end_inline_math: $ => '$',
     end_display_math: $ => '$$',
 
-    text_group: $ => seq($.begin_group, optional($._text_mode), $.end_group),
-
     _text_mode: $ => choice(
       $.comment,
       $.control_sequence,
       $.text_group,
       $.text,
-      $.environment
+      $.environment,
+      $.verbatim
     ),
+
+    text_group: $ => seq($.begin_group, optional($._text_mode), $.end_group),
 
     control_sequence: $ => choice(
       $.control_symbol,
@@ -59,28 +64,34 @@ module.exports = grammar({
     letters: $ => /[a-zA-Z@]+/,
     trailing_space: $ => /[\s\t\n]+/,
 
+    verbatim: $ => seq($.escape_char, "verb", optional($._whitespace), $._verb),
+
     text: $ => /[^\s\n\t\#\$\%\^\&\_\{\}\~\\][^\#\$\%\^\&\_\{\}\~\\]*/,
 
-    environment: $ => seq($.open_env, $.env_body, $.close_env),
+    environment: $ => seq($.open_env, optional($.env_body), $.close_env),
 
     env_body: $ => $._text_mode,
 
     open_env: $ => seq(
-      $.escape_char,
-      "begin",
+      $.begin_command,
       optional($._whitespace),
       $.begin_group,
       alias($._start_env_name, $.env_name),
-      $.end_group
+      $.end_group,
+      optional($._whitespace)
     ),
 
+    begin_command: $ => seq($.escape_char, "begin"),
+
     close_env: $ => seq(
-      $.escape_char,
-      "end",
+      $.end_command,
       optional($._whitespace),
       $.begin_group,
       alias($._end_env_name, $.env_name),
-      $.end_group
+      $.end_group,
+      optional($._whitespace)
     ),
+
+    end_command: $ => seq($.escape_char, "end"),
   }
 });

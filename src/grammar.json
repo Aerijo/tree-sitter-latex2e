@@ -135,31 +135,6 @@
       "type": "STRING",
       "value": "$$"
     },
-    "text_group": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "begin_group"
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "_text_mode"
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
-        },
-        {
-          "type": "SYMBOL",
-          "name": "end_group"
-        }
-      ]
-    },
     "_text_mode": {
       "type": "CHOICE",
       "members": [
@@ -182,6 +157,35 @@
         {
           "type": "SYMBOL",
           "name": "environment"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "verbatim"
+        }
+      ]
+    },
+    "text_group": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "begin_group"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_text_mode"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "end_group"
         }
       ]
     },
@@ -248,6 +252,35 @@
       "type": "PATTERN",
       "value": "[\\s\\t\\n]+"
     },
+    "verbatim": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "escape_char"
+        },
+        {
+          "type": "STRING",
+          "value": "verb"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_whitespace"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_verb"
+        }
+      ]
+    },
     "text": {
       "type": "PATTERN",
       "value": "[^\\s\\n\\t\\#\\$\\%\\^\\&\\_\\{\\}\\~\\\\][^\\#\\$\\%\\^\\&\\_\\{\\}\\~\\\\]*"
@@ -260,8 +293,16 @@
           "name": "open_env"
         },
         {
-          "type": "SYMBOL",
-          "name": "env_body"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "env_body"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -278,11 +319,7 @@
       "members": [
         {
           "type": "SYMBOL",
-          "name": "escape_char"
-        },
-        {
-          "type": "STRING",
-          "value": "begin"
+          "name": "begin_command"
         },
         {
           "type": "CHOICE",
@@ -312,10 +349,22 @@
         {
           "type": "SYMBOL",
           "name": "end_group"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_whitespace"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
-    "close_env": {
+    "begin_command": {
       "type": "SEQ",
       "members": [
         {
@@ -324,7 +373,16 @@
         },
         {
           "type": "STRING",
-          "value": "end"
+          "value": "begin"
+        }
+      ]
+    },
+    "close_env": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "end_command"
         },
         {
           "type": "CHOICE",
@@ -354,6 +412,31 @@
         {
           "type": "SYMBOL",
           "name": "end_group"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_whitespace"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "end_command": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "escape_char"
+        },
+        {
+          "type": "STRING",
+          "value": "end"
         }
       ]
     }
@@ -373,6 +456,14 @@
     {
       "type": "SYMBOL",
       "name": "_end_env_name"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_erroneous_end_env_name"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_verb"
     }
   ],
   "inline": []
