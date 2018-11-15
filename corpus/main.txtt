@@ -10,7 +10,7 @@ Command
 
 
 ======
-Environment
+Plain Environment
 ======
 
 \begin{foo} \end{foo}
@@ -26,6 +26,22 @@ Environment
   (environment
     (open_env (begin_command (escape_char)) (begin_group) (env_name) (end_group))
     (env_body (text))
+    (close_env (end_command (escape_char)) (begin_group) (env_name) (end_group))
+  )
+)
+
+
+======
+Environment With Command Sequence
+======
+
+\begin{foo} \end{a\bar}
+
+-----
+
+(program
+  (environment
+    (open_env (begin_command (escape_char)) (begin_group) (env_name) (end_group))
     (close_env (end_command (escape_char)) (begin_group) (env_name) (end_group))
   )
 )

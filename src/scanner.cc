@@ -95,7 +95,13 @@ struct Scanner {
         case '}':
           if (nest_level == 0)
           {
-            // std::cout << "detected: " << env_name << "\n";
+            std::cout << "detected: " << env_name;
+
+            if (has_command) {
+              std::cout << " (with command seq)";
+            }
+
+            std::cout << "\n";
             return env_name;
           }
           lexer->advance(lexer, false);
@@ -126,7 +132,7 @@ struct Scanner {
   bool scan_end_env_name(TSLexer *lexer)
   {
     string name = scan_env_name(lexer);
-    
+
     Env env = Env::for_name(name, has_command);
 
     if (!environments.empty() && environments.back() == env) {

@@ -58,6 +58,7 @@ module.exports = grammar({
     ),
 
     control_symbol: $ => seq($.escape_char, $.symbol), // trailing space is not removed in a control symbol.
+
     control_word:   $ => seq($.escape_char, $.letters, optional($.trailing_space)),
 
     symbol:  $ => /[^a-zA-Z@]/,

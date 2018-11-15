@@ -108,6 +108,7 @@ struct Env {
   Env(EnvType type, const string &name) : type(type), custom_env_name(name) {}
 
   bool operator==(const Env &other) const {
+    if (type == WILDCARD || other.type == WILDCARD) return true;
     if (type != other.type) return false;
     if (type == CUSTOM && custom_env_name != other.custom_env_name) return false;
     return true;
