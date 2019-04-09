@@ -19,12 +19,12 @@
   "dependencies": {
     "nan": "^2.10.0"
   },
-  "devDependencies": {
-    "tree-sitter-cli": "^0.13.8"
-  },
   "scripts": {
     "build": "tree-sitter generate && node-gyp build",
     "parse": "node scripts/parse.js",
     "test": "tree-sitter test && tree-sitter parse examples --quiet --time"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.14.5"
   }
 }

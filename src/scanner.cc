@@ -15,143 +15,32 @@ using std::vector;
 using std::string;
 
 enum TokenType {
-  START_ENV_NAME,
-  END_ENV_NAME,
-  ERRONEOUS_END_ENV_NAME,
-  VERBATIM
+  ERROR,
+  VERBATIM,
+  COMMENT,
+  MAGIC_COMMENT,
+  STAR,
+  S_WHITESPACE, // allows newline
+  M_WHITESPACE, // no newline (really is n mode)
 };
 
 struct Scanner {
-  vector<Env> environments;
+  Scanner () {}
 
-  bool has_command;
+  void destroy () {}
 
-  Scanner() {}
-
-  void destroy()
-  {
-
-  }
-
-  unsigned serialize(char *buffer)
-  {
+  unsigned serialize (char *buffer) {
     int i = 9;
     return i;
   }
 
-  void deserialize(const char *buffer, unsigned length)
-  {
+  void deserialize (const char *buffer, unsigned length) {}
 
-  }
-
-
-  /**
-   * Grabs the environment's name, with some modifications:
-   *  - Comments, and all characters following up to and including
-   *    a newline are ignored
-   *  - Consecutive spaces are normalised to single width
-   *  - Braces are balanced, but not added to the name
-   *  - Every backslash and the character following it is added
-   *
-   * These changes are intended to reflect how LaTeX sees the name.
-   * Naturally, we can't account for what any control sequences expand
-   * to, but this method is a good balance of accuracy and speed.
-   *
-   * @param  lexer The interface with the text
-   * @return       A string containing the environment name
-   */
-  string scan_env_name(TSLexer *lexer)
-  {
-    // TODO: Apply scopes to the found commands and comments too
-    string env_name;
-    has_command = false;
-    int nest_level = 0;
-    while (lexer->lookahead)
-    {
-      // std::cout << "reading " << string(1, lexer->lookahead) << "\n";
-      switch (lexer->lookahead)
-      {
-        case '\\':
-          has_command = true;
-          env_name += '\\';
-          lexer->advance(lexer, false); // TODO: Does this cause error at end of file?
-          env_name += lexer->lookahead; // TODO: Account for spaces here?
-          lexer->advance(lexer, false);
-          break;
-        case '%':
-          while (lexer->lookahead != '\n') lexer->advance(lexer, false);
-          while (lexer->lookahead == ' ') lexer->advance(lexer, false);
-          break;
-        case ' ':
-        case '\n':
-          env_name += ' ';
-          lexer->advance(lexer, false);
-          while (lexer->lookahead == ' ') lexer->advance(lexer, false);
-          break;
-        case '{':
-          nest_level += 1;
-          lexer->advance(lexer, false);
-          break;
-        case '}':
-          if (nest_level == 0)
-          {
-            std::cout << "detected: " << env_name;
-
-            if (has_command) {
-              std::cout << " (with command seq)";
-            }
-
-            std::cout << "\n";
-            return env_name;
-          }
-          lexer->advance(lexer, false);
-          nest_level -= 1;
-          break;
-        default:
-          env_name += lexer->lookahead;
-          lexer->advance(lexer, false);
-      }
-    }
-
-    return NULL_NAME;
-  }
-
-  bool scan_start_env_name(TSLexer *lexer)
-  {
-    string name = scan_env_name(lexer);
-
-    Env env = Env::for_name(name, has_command);
-
-    environments.push_back(env);
-
-    lexer->result_symbol = START_ENV_NAME;
-
-    return true;
-  }
-
-  bool scan_end_env_name(TSLexer *lexer)
-  {
-    string name = scan_env_name(lexer);
-
-    Env env = Env::for_name(name, has_command);
-
-    if (!environments.empty() && environments.back() == env) {
-      environments.pop_back();
-      lexer->result_symbol = END_ENV_NAME;
-    } else {
-      lexer->result_symbol = ERRONEOUS_END_ENV_NAME;
-    }
-
-    return true;
-  }
-
-  bool scan_verbatim(TSLexer *lexer)
-  {
-    while (lexer->lookahead == ' ') lexer->advance(lexer, false);
-
+  bool scan_verbatim (TSLexer *lexer, bool starValid) {
+    // NOTE: ' ' (space) is a valid delim character
+    //   As is '*'; the first star is gobbled by the main grammar if present
     char start_delim;
-    switch (lexer->lookahead)
-    {
+    switch (lexer->lookahead) {
       case '\n':
       case '\0':
         return false;
@@ -160,41 +49,115 @@ struct Scanner {
         lexer->advance(lexer, false);
     }
 
-    while (lexer->lookahead)
-    {
-      if (lexer->lookahead == start_delim || lexer->lookahead == '\n') break;
+    if (starValid && start_delim == '*') return false;
+
+    while (lexer->lookahead && lexer->lookahead != start_delim && lexer->lookahead != '\n') {
       lexer->advance(lexer, false);
     }
+
+    if (lexer->lookahead == start_delim) lexer->advance(lexer, false);
+    lexer->mark_end(lexer);
 
     lexer->result_symbol = VERBATIM;
     return true;
   }
 
-  bool scan(TSLexer *lexer, const bool *valid_symbols)
-  {
-    // std::cout << "scanning";
 
-    if (valid_symbols[START_ENV_NAME])
-    {
-      // std::cout << " for start env name" << "\n";
-      return scan_start_env_name(lexer);
+  bool isErrorDetectionMode (const bool *validSymbols) {
+    return validSymbols[ERROR];
+  }
+
+  bool scan_magic_comment (TSLexer *lexer) {
+    if (lexer->lookahead != '%') return false;
+    lexer->advance(lexer, false);
+    while (lexer->lookahead == ' ') lexer->advance(lexer, false);
+    if (lexer->lookahead != '!') return scan_comment_text(lexer);
+    lexer->advance(lexer, false);
+    if (lexer->lookahead != 'T') return scan_comment_text(lexer);
+    lexer->advance(lexer, false);
+    if (lexer->lookahead != 'e' && lexer->lookahead != 'E') return scan_comment_text(lexer);
+    lexer->advance(lexer, false);
+    if (lexer->lookahead != 'X') return scan_comment_text(lexer);
+
+    return scan_comment_text(lexer, MAGIC_COMMENT);
+  }
+
+  bool scan_comment (TSLexer *lexer) {
+    if (lexer->lookahead != '%') return false;
+    return scan_comment_text(lexer);
+  }
+
+  bool scan_comment_text (TSLexer *lexer, TokenType type=COMMENT) {
+    lexer->result_symbol = type;
+    while (lexer->lookahead && lexer->lookahead != '\n') lexer->advance(lexer, false);
+    lexer->advance(lexer, false);
+    return true;
+  }
+
+  bool is_inline_space (uint32_t symbol) {
+    return symbol == ' ' || symbol == '\t';
+  }
+
+  bool scan_sm_whitespace (TSLexer *lexer, bool s_mode) {
+    if (!(lexer->lookahead && is_inline_space(lexer->lookahead))) {
+      if (s_mode && lexer->lookahead == '\n') {
+        lexer->advance(lexer, false);
+        lexer->result_symbol = S_WHITESPACE;
+        return true;
+      }
+      return false;
+    };
+    lexer->advance(lexer, false);
+
+    while (lexer->lookahead && is_inline_space(lexer->lookahead)) lexer->advance(lexer, false);
+    
+    lexer->result_symbol = M_WHITESPACE;
+    if (lexer->lookahead == '\n') {
+      if (s_mode) {
+        lexer->advance(lexer, false);
+        lexer->result_symbol = S_WHITESPACE;
+      } else {
+        return false;
+      }
+    }
+    lexer->mark_end(lexer);
+    return true;
+  }
+
+  bool scan (TSLexer *lexer, const bool *valid_symbols) {
+    if (isErrorDetectionMode(valid_symbols)) {
+      std::cerr << "error!\n";
+      return false;
+    }
+    
+    if (valid_symbols[STAR] && lexer->lookahead == '*') {
+      lexer->advance(lexer, false);
+      lexer->result_symbol = STAR;
+      return true;
+    }
+    
+    if (valid_symbols[M_WHITESPACE]) {
+      std::cerr << "checking sm whitespace\n";
+      if (scan_sm_whitespace(lexer, valid_symbols[S_WHITESPACE])) return true;
     }
 
-    if (valid_symbols[END_ENV_NAME])
-    {
-      // std::cout << " for end env name" << "\n";
-      return scan_end_env_name(lexer);
+    if (valid_symbols[VERBATIM]) {
+      std::cerr << "checking verb\n";
+      return scan_verbatim(lexer, valid_symbols[STAR]);
     }
 
-    if (valid_symbols[VERBATIM])
-    {
-      // std::cout << " for verbatim" << "\n";
-      return scan_verbatim(lexer);
+    if (valid_symbols[MAGIC_COMMENT]) {
+      std::cerr << "checking magic\n";
+      return scan_magic_comment(lexer);
+    }
+
+    if (valid_symbols[COMMENT]) {
+      std::cerr << "checking comment\n";
+      return scan_comment(lexer);
     }
 
     return false;
   }
-
 };
 
 }

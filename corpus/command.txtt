@@ -1,0 +1,13 @@
+======
+Word
+======
+\foo
+-----
+(program (control_word (cs)))
+
+======
+Symbol
+======
+\#
+-----
+(program (control_symbol (cs)))

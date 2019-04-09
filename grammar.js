@@ -1,98 +1,167 @@
-// NOTE: investigate cause of module not self-registered error
+const cmd = ($, name, {ws=true, star=false, argument=null}) => {
+  const arg = [$._escape_char, alias(name, $.cs)]
+
+  if (!star && !argument) return seq(...arg)
+
+  if (ws && star) {
+    arg.push(optional($.s_whitespace), repeat($.m_whitespace), optional(seq($.star, optional($.s_whitespace), repeat($.m_whitespace))))
+    if (argument) {
+      arg.push(argument)
+    }
+  } else if (ws && !star && argument) {
+    arg.push(optional($.s_whitespace), repeat($.m_whitespace), argument)
+  }
+
+  let result = seq(...arg)
+  if (argument) {
+    result = prec.right(result)
+  }
+
+  return result
+
+  /*
+  Whitespace rules:
+    1) Every line starts as (N)
+    2) The state is (S) after a control word
+    3) The state is (S) after a control space '\ '
+    4) The state is (M) after any other control symbol
+    5) If a newline is seen:
+      (N) - '\par' is inserted
+      (S) - Ignored
+      (M) - ' ' is inserted
+    6) Comments consume the newline, so the state simply switches to (N) regardless
+
+  Extra rules:
+    1) If a command can be starred, it is in state (S) after the star
+
+
+  E.g.,
+  ```
+  (N)   \begin    (S)    \n
+  (N)     % (Note newline is removed by comment)
+  (N) {env} % <- this is the argument to \begin
+
+
+  (N)   \section  (S)    *  (M)   \n (in M, so space)
+  (N)      {name}
+  ```
+  */
+}
+
+const group = ($, contents, opt=true) => {
+  if (contents instanceof Array) {
+    contents = seq(...contents)
+  }
+
+  if (opt) {
+    contents = optional(contents)
+  }
+
+  return seq($.begin_group, contents, $.end_group)
+}
+
+/**
+ * This grammar targets a broader version of LaTeX than I would use
+ * for syntax highlighting. Only the bare minimum for accurate highlighting
+ * is prsesent; the interpretation of a command and environment is left to
+ * the server.
+ *
+ * Exceptions include commands like `\verb`, which would probably break the
+ * grammar if they aren't special cased.
+ */
 
 module.exports = grammar({
   name: "latex",
 
   externals: $ => [
-    $._start_env_name,
-    $._end_env_name,
-    $._erroneous_end_env_name,
-    $._verb
+    $._error,
+    $.verb,
+    $.comment,
+    $.magic_comment,
+    $.star, // defined in this file
+    $.s_whitespace,
+    $.m_whitespace,
+  ],
+
+  extras: $ => [
+    $.comment
   ],
 
   rules: {
-    program: $ => repeat($._text_mode),
+    program: $ => optional($._text_mode),
 
-    comment: $ => seq($.comment_char, choice(
-      $.magic_comment,
-      optional($.comment_text)
-    )),
-
-    magic_comment: $ => seq(/\s*/, /!T[eE]X/, /\s+/, optional($.comment_text)),
-    comment_text: $ => /.+\n/,
+    /** TERMINAL SYMBOLS */
 
     // special characters associated with the 15 catcodes
-    escape_char: $ => '\\',
-    begin_group: $ => '{',
-    end_group: $ => '}',
-    math_shift: $ => '$',
-    alignment_tab: $ => '&',
-    _end_of_line: $ => '\n',
-    parameter_token: $ => '#',
-    superscript: $ => '^',
-    subscript: $ => '_',
-    active_char: $ => '~',
-    comment_char: $ => '%',
+    _escape_char: _ => '\\',
+    begin_group: _ => '{',
+    end_group: _ => '}',
+    math_shift: _ => '$',
+    alignment_tab: _ => '&',
+    _end_of_line: _ => '\n',
+    parameter_token: _ => '#',
+    superscript: _ => '^',
+    subscript: _ => '_',
+    active_char: _ => '~',
 
-    _whitespace: $ => /[\n\s\t]/,
+    inline_math_shift: _ => '$',
+    display_math_shift: _ => '$$',
 
-    begin_inline_math: $ => '$',
-    begin_display_math: $ => '$$',
-    end_inline_math: $ => '$',
-    end_display_math: $ => '$$',
+    text: _ => /[^\s\n\t\#\$%\^&_\{\}~\\][^\#\$%\^\&_\{\}~\\]*/,
 
-    _text_mode: $ => choice(
-      $.comment,
-      $.control_sequence,
+    symbol:  _ => /[^a-zA-Z@]/,
+    letters: _ => /[a-zA-Z@]+/,
+    _trailing_space: _ => /[\s\t\n]+/,
+
+    /** NONTERMINAL SYMBOLS */
+
+    _text_mode: $ => prec.right(repeat1(choice(
+      $.magic_comment,
+      $._control_sequence,
       $.text_group,
       $.text,
       $.environment,
-      $.verbatim
-    ),
+      $.verbatim,
+    ))),
+
+    _simple_group_mode: $ => repeat1(choice(
+      $._control_sequence,
+      $.inline_math_shift,
+      $.display_math_shift,
+      $.text
+    )),
 
     text_group: $ => seq($.begin_group, optional($._text_mode), $.end_group),
 
-    control_sequence: $ => choice(
+    _control_sequence: $ => choice(
+      cmd($, " ", {star: false, ws: true}),
       $.control_symbol,
       $.control_word
     ),
 
-    control_symbol: $ => seq($.escape_char, $.symbol), // trailing space is not removed in a control symbol.
+    control_symbol: $ => cmd($, $.symbol, {ws: false}), // trailing space is not removed in a control symbol.
+    control_word:   $ => cmd($, $.letters, {ws: true}),
 
-    control_word:   $ => seq($.escape_char, $.letters, optional($.trailing_space)),
-
-    symbol:  $ => /[^a-zA-Z@]/,
-    letters: $ => /[a-zA-Z@]+/,
-    trailing_space: $ => /[\s\t\n]+/,
-
-    verbatim: $ => seq($.escape_char, "verb", optional($._whitespace), $._verb),
-
-    text: $ => /[^\s\n\t\#\$\%\^\&\_\{\}\~\\][^\#\$\%\^\&\_\{\}\~\\]*/,
+    verbatim: $ => seq(cmd($, "verb", {ws: false, star: true}), $.verb),
 
     environment: $ => seq($.open_env, optional($.env_body), $.close_env),
 
     env_body: $ => $._text_mode,
 
+    env_name: $ => repeat1(alias($.letters, $.env_name_part)),
+
     open_env: $ => seq(
       $.begin_command,
-      optional($._whitespace),
-      $.begin_group,
-      alias($._start_env_name, $.env_name),
-      $.end_group,
-      optional($._whitespace)
+      group($, optional(alias($._simple_group_mode, $.env_name))),
     ),
 
-    begin_command: $ => seq($.escape_char, "begin"),
+    begin_command: $ => cmd($, "begin", {}),
 
     close_env: $ => seq(
       $.end_command,
-      optional($._whitespace),
-      $.begin_group,
-      alias($._end_env_name, $.env_name),
-      $.end_group,
-      optional($._whitespace)
+      group($, optional(alias($._simple_group_mode, $.env_name))),
     ),
 
-    end_command: $ => seq($.escape_char, "end"),
+    end_command: $ => cmd($, "end", {}),
   }
-});
+})
